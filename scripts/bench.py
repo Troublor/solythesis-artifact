@@ -4,6 +4,21 @@ import os
 import json
 import web3
 import os
+from eth_account import Account
+
+
+class AnvilPersonalModule:
+    def __init__(self, w3):
+        self.w3 = w3
+
+    def newAccount(self, password):
+        return self.w3.manager.request_blocking(
+            "personal_newAccount", [password])
+
+    def unlockAccount(self, address, passphrase, duration=None):
+        return self.w3.manager.request_blocking(
+            "anvil_impersonateAccount", [address])
+
 
 ALL_OUTPUT_VALUES = (
     "abi",
@@ -25,8 +40,10 @@ class Bench:
     }
 
     def __init__(self, endpoint, contract_path, contract_name, pow=True):
-        client = web3.Web3.IPCProvider(endpoint, timeout=30)
-        self.w3 = web3.Web3(client)
+        client = web3.Web3.IPCProvider(endpoint, timeout=20)
+        self.w3 = web3.Web3(client, external_modules={
+            'anvil': AnvilPersonalModule,
+        })
         self.pow = pow
         self.nonce_map = {}
         self.address_map = {}
@@ -56,10 +73,11 @@ class Bench:
             attributes['gasPrice'] = 2
         tx_data = func(*args).buildTransaction(attributes)
         if private_key:
-            signed_txn = self.w3.eth.account.signTransaction(tx_data, private_key=private_key)
+            signed_txn = self.w3.eth.account.signTransaction(
+                tx_data, private_key=private_key)
             result = self.w3.eth.sendRawTransaction(signed_txn.rawTransaction)
         else:
-            self.w3.parity.personal.unlockAccount(sender, 'x')
+            self.w3.anvil.unlockAccount(sender, 'x')
             result = self.w3.eth.sendTransaction(tx_data)
         if wait and self.pow:
             self.wait_for_result(result)
@@ -75,7 +93,8 @@ class Bench:
         output = []
         for elem in abi:
             if 'address' in elem['type']:
-                output.append(self.replace_addresses_recursive(args[elem['name']]))
+                output.append(
+                    self.replace_addresses_recursive(args[elem['name']]))
             else:
                 output.append(args[elem['name']])
         return output
@@ -86,7 +105,9 @@ class Bench:
             if new_addr:
                 self.address_map[origin_addr] = new_addr
             else:
-                self.address_map[origin_addr] = self.w3.parity.personal.newAccount('x')
+                # self.address_map[origin_addr] = self.w3.parity.personal.newAccount(
+                #     'x')
+                self.address_map[origin_addr] = Account.create().address
         return self.address_map[origin_addr]
 
     def replay_contract_function(self, data, sender, contract_address, value, private_key=None):
@@ -103,15 +124,18 @@ class Bench:
         if 'chainId' in raw_transaction:
             del raw_transaction['chainId']
         if private_key:
-            signed_transaction = self.w3.eth.account.signTransaction(raw_transaction, private_key)
+            signed_transaction = self.w3.eth.account.signTransaction(
+                raw_transaction, private_key)
             return self.w3.eth.sendRawTransaction(signed_transaction.rawTransaction)
         else:
-            result = self.w3.parity.personal.sendTransaction(raw_transaction, "x")
+            self.w3.anvil.unlockAccount(sender, 'x')
+            result = self.w3.eth.sendTransaction(
+                raw_transaction)
         return result
 
     def compile_contract(self, path, contract_name):
         compiled_sol = compile_files([path], output_values=ALL_OUTPUT_VALUES, optimize=True, optimize_runs=200,
-                                     solc_binary=os.path.expanduser("/home/ubuntu/.solcx/solc"))
+                                     solc_binary="solc")
         contract = compiled_sol[path + ':' + contract_name]
         return self.w3.eth.contract(abi=contract['abi'], bytecode=contract['bin'])
 
@@ -134,10 +158,10 @@ class Bench:
         return self.w3.eth.sendRawTransaction(signed_transaction.rawTransaction)
 
     def new_address(self):
-        return self.w3.parity.personal.newAccount('x')
+        return self.w3.anvil.newAccount('x')
 
     def new_address_and_transfer(self, sender, private_key):
-        new = self.w3.parity.personal.newAccount('x')
+        new = self.w3.anvil.newAccount('x')
         result = self.transfer(sender, new, 100000000000000, private_key)
         return [new, result]
 

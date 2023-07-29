@@ -87,3 +87,6 @@ lib/
 src/antlr/
 !src/antlr/Solidity.g4
 out/
+
+scripts/__pycache__/
+output/

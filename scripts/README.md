@@ -16,7 +16,7 @@ python3 [REPLAY_SCRIPT] [PATH_TO_FULLNODE]/jsonrpc.ipc [CONFIG] [CONTRACT_PATH] 
 ## Arguments
 
 - REPLAY_SCRIPT - python script that generates transactions.
-- PATH_TO_FULLNODE - the path of the fullnode base. 
+- PATH_TO_FULLNODE - the path of the fullnode base.
 - CONFIG - path to the real word transactions or configs python script.
 - CONTRACT_PATH - path to smart contracts.
 - ACCOUNTS - path to Ethereum account secrets.
